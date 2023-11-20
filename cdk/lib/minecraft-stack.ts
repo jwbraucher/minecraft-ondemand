@@ -130,6 +130,7 @@ export class MinecraftStack extends Stack {
         ],
         environment: config.minecraftImageEnv,
         essential: true,
+        pseudoTerminal: true,
         taskDefinition,
         logging: config.debug
           ? new ecs.AwsLogDriver({
@@ -141,7 +142,7 @@ export class MinecraftStack extends Stack {
     );
 
     minecraftServerContainer.addMountPoints({
-      containerPath: '/data',
+      containerPath: '/minecraft',
       sourceVolume: constants.ECS_VOLUME_NAME,
       readOnly: false,
     });

@@ -8,5 +8,5 @@ export const constants = {
   HOSTED_ZONE_SSM_PARAMETER: 'MinecraftHostedZoneID',
   LAUNCHER_LAMBDA_ARN_SSM_PARAMETER: 'LauncherLambdaRoleArn',
   JAVA_EDITION_DOCKER_IMAGE: 'itzg/minecraft-server',
-  BEDROCK_EDITION_DOCKER_IMAGE: 'itzg/minecraft-bedrock-server',
+  BEDROCK_EDITION_DOCKER_IMAGE: '05jchambers/legendary-bedrock-container',
 }
