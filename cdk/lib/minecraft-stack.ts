@@ -129,7 +129,7 @@ export class MinecraftStack extends Stack {
           },
         ],
         environment: config.minecraftImageEnv,
-        essential: false,
+        essential: true,
         taskDefinition,
         logging: config.debug
           ? new ecs.AwsLogDriver({
