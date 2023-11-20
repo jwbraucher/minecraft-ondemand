@@ -327,6 +327,44 @@ export class MinecraftStack extends Stack {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
       description: 'Minecraft EC2 instance role',
     });
+
+    const ssmManagedInstanceCorePolicy = new iam.Policy(this, 'SSMManagedInstanceCorePolicy', {
+      statements: [
+        new iam.PolicyStatement({
+          sid: 'AllowSSMManagedInstance',
+          effect: iam.Effect.ALLOW,
+          actions: [
+            "ssm:DescribeAssociation",
+            "ssm:GetDeployablePatchSnapshotForInstance",
+            "ssm:GetDocument",
+            "ssm:DescribeDocument",
+            "ssm:GetManifest",
+            "ssm:GetParameter",
+            "ssm:GetParameters",
+            "ssm:ListAssociations",
+            "ssm:ListInstanceAssociations",
+            "ssm:PutInventory",
+            "ssm:PutComplianceItems",
+            "ssm:PutConfigurePackageResult",
+            "ssm:UpdateAssociationStatus",
+            "ssm:UpdateInstanceAssociationStatus",
+            "ssm:UpdateInstanceInformation",
+            "ssmmessages:CreateControlChannel",
+            "ssmmessages:CreateDataChannel",
+            "ssmmessages:OpenControlChannel",
+            "ssmmessages:OpenDataChannel",
+            "ec2messages:AcknowledgeMessage",
+            "ec2messages:DeleteMessage",
+            "ec2messages:FailMessage",
+            "ec2messages:GetEndpoint",
+            "ec2messages:GetMessages",
+            "ec2messages:SendReply"
+          ],
+          resources: ['*']
+        }),
+      ],
+    });
+    ssmManagedInstanceCorePolicy.attachToRole(efsMaintenanceInstanceRole);
     efsReadWriteDataPolicy.attachToRole(efsMaintenanceInstanceRole);
 
     const efsMaintenanceSecurityGroup = new ec2.SecurityGroup(
@@ -336,11 +374,6 @@ export class MinecraftStack extends Stack {
         vpc,
         description: 'Security group for Minecraft on-demand EFS Maintenance Instances',
       }
-    );
-
-    efsMaintenanceSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(22)
     );
 
     /* Allow access to EFS from Fargate service security group */
