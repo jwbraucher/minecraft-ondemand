@@ -129,6 +129,7 @@ export class MinecraftStack extends Stack {
           },
         ],
         environment: config.minecraftImageEnv,
+        entryPoint: [ '/minecraft/start.sh' ],
         essential: true,
         pseudoTerminal: true,
         taskDefinition,
