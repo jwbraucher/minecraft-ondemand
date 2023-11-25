@@ -88,29 +88,6 @@ export class MinecraftStack extends Stack {
       enableFargateCapacityProviders: true,
     });
 
-    const taskDefinition = new ecs.FargateTaskDefinition(
-      this,
-      'TaskDefinition',
-      {
-        taskRole: ecsTaskRole,
-        memoryLimitMiB: config.taskMemory,
-        cpu: config.taskCpu,
-        volumes: [
-          {
-            name: constants.ECS_VOLUME_NAME,
-            efsVolumeConfiguration: {
-              fileSystemId: fileSystem.fileSystemId,
-              transitEncryption: 'ENABLED',
-              authorizationConfig: {
-                accessPointId: accessPoint.accessPointId,
-                iam: 'ENABLED',
-              },
-            },
-          },
-        ],
-      }
-    );
-
     const serviceSecurityGroup = new ec2.SecurityGroup(
       this,
       'ServiceSecurityGroup',
@@ -247,6 +224,29 @@ runcmd:
         `Minecraft-Server-Ingress-${minecraftServerConfig.ingressRulePort}`,
       );
 
+      const taskDefinition = new ecs.FargateTaskDefinition(
+        this,
+        'TaskDefinition-' + key,
+        {
+          taskRole: ecsTaskRole,
+          memoryLimitMiB: config.taskMemory,
+          cpu: config.taskCpu,
+          volumes: [
+            {
+              name: constants.ECS_VOLUME_NAME,
+              efsVolumeConfiguration: {
+                fileSystemId: fileSystem.fileSystemId,
+                transitEncryption: 'ENABLED',
+                authorizationConfig: {
+                  accessPointId: accessPoint.accessPointId,
+                  iam: 'ENABLED',
+                },
+              },
+            },
+          ],
+        }
+      );
+
       const minecraftServerContainer = new ecs.ContainerDefinition(
         this,
         'ServerContainer-' + key,
@@ -296,7 +296,7 @@ runcmd:
           ],
           taskDefinition: taskDefinition,
           platformVersion: ecs.FargatePlatformVersion.LATEST,
-          serviceName: constants.SERVICE_NAME,
+          serviceName: constants.SERVICE_NAME + '-' + key,
           desiredCount: 0,
           assignPublicIp: true,
           securityGroups: [serviceSecurityGroup],
