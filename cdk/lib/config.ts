@@ -5,22 +5,6 @@ import { stringAsBoolean } from './util';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-const resolveMinecraftEnvVars = (json = ''): MinecraftImageEnv => {
-  const defaults = {};
-  try {
-    return {
-      ...defaults,
-      ...JSON.parse(json),
-    };
-  } catch (e) {
-    console.error(
-      'Unable to resolve .env value for MINECRAFT_IMAGE_ENV_VARS_JSON.\
-      Defaults will be used'
-    );
-    return defaults;
-  }
-};
-
 const resolveMinecraftServerDefs = (json = ''): MinecraftServerDefs => {
   const defaults = {};
   try {
@@ -38,7 +22,6 @@ const resolveMinecraftServerDefs = (json = ''): MinecraftServerDefs => {
 
 export const resolveConfig = (): StackConfig => ({
   domainName: process.env.DOMAIN_NAME || '',
-  subdomainPart: process.env.SUBDOMAIN_PART || 'minecraft',
   serverRegion: process.env.SERVER_REGION || 'us-east-1',
   minecraftEdition:
     process.env.MINECRAFT_EDITION === 'bedrock' ? 'bedrock' : 'java',
@@ -48,9 +31,6 @@ export const resolveConfig = (): StackConfig => ({
   taskCpu: +(process.env.TASK_CPU || 1024),
   taskMemory: +(process.env.TASK_MEMORY || 2048),
   vpcId: process.env.VPC_ID || '',
-  minecraftImageEnv: resolveMinecraftEnvVars(
-    process.env.MINECRAFT_IMAGE_ENV_VARS_JSON
-  ),
   snsEmailAddress: process.env.SNS_EMAIL_ADDRESS || '',
   twilio: {
     phoneFrom: process.env.TWILIO_PHONE_FROM || '',

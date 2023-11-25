@@ -29,7 +29,7 @@ export class DomainStack extends Stack {
 
     const { config } = props;
 
-    const subdomain = `${config.subdomainPart}.${config.domainName}`;
+    const subdomain = config.domainName;
 
     const queryLogGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/aws/route53/${subdomain}`,
@@ -131,7 +131,7 @@ export class DomainStack extends Stack {
        * unfortunately Minecraft Bedrock does not support this yet.
        */
       const dnsFilterPattern = config.minecraftEdition === "java"
-      ? `_minecraft._tcp.${key}.${config.subdomainPart}.${config.domainName}`
+      ? `_minecraft._tcp.${key}.${config.domainName}`
       : `${key}.${subdomain}`;
 
       if ( thisMinecrafServertDef.cloudWatchTriggerEnabled ) {

@@ -44,14 +44,6 @@ export interface StackConfig {
    */
   domainName: string;
   /**
-   * Name of the subdomain part to be used for creating a delegated hosted zone
-   * (minecraft.example.com) and an NS record on your existing (example.com)
-   * hosted zone. This subdomain should not already be in use.
-   *
-   * @default "minecraft"
-   */
-  subdomainPart: string;
-  /**
    * The AWS region to deploy your minecraft server in.
    *
    * @default "us-east-1"
@@ -136,14 +128,7 @@ export interface StackConfig {
    */
   snsEmailAddress: string;
   twilio: TwilioConfig;
-  /**
-   * Additional environment variables to be passed to the
-   * [Minecraft Docker Server](https://github.com/itzg/docker-minecraft-server/blob/master/README.md)
-   * [Minecraft Bedrock Docker](https://github.com/itzg/docker-minecraft-bedrock-server/blob/master/README.md)
-   *
-   * @default '{ "EULA": "TRUE" }'
-   */
-  minecraftImageEnv: MinecraftImageEnv;
+
   /**
    * Setting to `true` enables debug mode.
    *

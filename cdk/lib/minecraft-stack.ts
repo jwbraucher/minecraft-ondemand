@@ -244,14 +244,14 @@ runcmd:
       serviceSecurityGroup.addIngressRule(
         ec2.Peer.anyIpv4(),
         minecraftServerConfig.ingressRulePort,
-        'Minecraft-Server-Ingress-' + key,
+        `Minecraft-Server-Ingress-${minecraftServerConfig.ingressRulePort}`,
       );
 
       const minecraftServerContainer = new ecs.ContainerDefinition(
         this,
         'ServerContainer-' + key,
         {
-          containerName: constants.MC_SERVER_CONTAINER_NAME,
+          containerName: constants.MC_SERVER_CONTAINER_NAME + '-' + key,
           image: ecs.ContainerImage.fromRegistry(minecraftServerConfig.image),
           portMappings: [
             {
@@ -312,7 +312,7 @@ runcmd:
         this,
         'WatchDogContainer-' + key,
         {
-          containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME,
+          containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME + '-' + key,
           image: isDockerInstalled()
             ? ecs.ContainerImage.fromAsset(
                 path.resolve(__dirname, '../../minecraft-ecsfargate-watchdog/')
@@ -326,7 +326,7 @@ runcmd:
             CLUSTER: constants.CLUSTER_NAME,
             SERVICE: constants.SERVICE_NAME,
             DNSZONE: hostedZoneId,
-            SERVERNAME: `${config.subdomainPart}.${config.domainName}`,
+            SERVERNAME: `${key}.${config.domainName}`,
             SNSTOPIC: snsTopicArn,
             TWILIOFROM: config.twilio.phoneFrom,
             TWILIOTO: config.twilio.phoneTo,
@@ -387,7 +387,7 @@ runcmd:
       ).getParameterValue();
       const launcherLambdaRole = iam.Role.fromRoleArn(
         this,
-        'LauncherLambdaRole',
+        'LauncherLambdaRole-' + key,
         launcherLambdaRoleArn
       );
       serviceControlPolicy.attachToRole(launcherLambdaRole);
