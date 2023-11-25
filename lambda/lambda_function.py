@@ -33,3 +33,8 @@ def lambda_handler(event, context):
         print("Updated desiredCount to 1")
     else:
         print("desiredCount already at 1")
+
+    return {
+       'statusCode': 200,
+       'body': "Launched " + SERVICE
+    }

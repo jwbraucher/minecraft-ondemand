@@ -324,7 +324,7 @@ runcmd:
           taskDefinition: taskDefinition,
           environment: {
             CLUSTER: constants.CLUSTER_NAME,
-            SERVICE: constants.SERVICE_NAME,
+            SERVICE: constants.SERVICE_NAME + '-' + key,
             DNSZONE: hostedZoneId,
             SERVERNAME: `${key}.${config.domainName}`,
             SNSTOPIC: snsTopicArn,
@@ -347,7 +347,7 @@ runcmd:
       const serviceControlPolicy = new iam.Policy(this, 'ServiceControlPolicy-' + key, {
         statements: [
           new iam.PolicyStatement({
-            sid: 'AllowAllOnServiceAndTask',
+            sid: 'AllowAllOnServiceAndTask' + key,
             effect: iam.Effect.ALLOW,
             actions: ['ecs:*'],
             resources: [
