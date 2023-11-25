@@ -17,7 +17,7 @@ import { Construct } from 'constructs';
 import { constants } from './constants';
 import { CWGlobalResourcePolicy } from './cw-global-resource-policy';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
-import { StackConfig } from './types';
+import { StackConfig, MinecraftServerDef } from './types';
 
 interface DomainStackProps extends StackProps {
   config: Readonly<StackConfig>;
@@ -71,67 +71,89 @@ export class DomainStack extends Stack {
     /* Resource policy for CloudWatch Logs is needed before the zone can be created */
     rootHostedZone.node.addDependency(cloudwatchLogResourcePolicy);
 
-    const aRecord = new route53.ARecord(this, 'ARecord', {
-      target: {
+    /* The remaining statements are exectued for each Minecraft server in the config */
+    const aRecords: route53.ARecord[] = []
+    Array.from(Object.keys(config.minecraftServerDefs)).forEach(key => {
+
+      const thisMinecrafServertDef: MinecraftServerDef = config.minecraftServerDefs[key]
+
+      aRecords.push(new route53.ARecord(this, 'ARecord-' + key, {
+        target: {
+          /**
+           * The value of the record is irrelevant because it will be updated
+           * every time our container launches.
+           */
+          values: ['192.168.1.1'],
+        },
         /**
-         * The value of the record is irrelevant because it will be updated
-         * every time our container launches.
+         * The low TTL is so that the DNS clients and non-authoritative DNS
+         * servers won't cache the record long and you can connect quicker after
+         * the IP updates.
          */
-        values: ['192.168.1.1'],
-      },
+        ttl: Duration.seconds(30),
+        recordName: key + '.' + subdomain,
+        zone: rootHostedZone,
+      }));
+
+      /* Set dependency on A record to ensure it is removed first on deletion */
+      aRecords[aRecords.length-1].node.addDependency(rootHostedZone);
+
+      const launcherLambda = new lambda.Function(this, 'LauncherLambda-' + key, {
+        code: lambda.Code.fromAsset(path.resolve(__dirname, '../../lambda')),
+        handler: 'lambda_function.lambda_handler',
+        runtime: lambda.Runtime.PYTHON_3_8,
+        environment: {
+          REGION: config.serverRegion,
+          CLUSTER: constants.CLUSTER_NAME,
+          SERVICE: constants.SERVICE_NAME,
+        },
+        logRetention: logs.RetentionDays.THREE_DAYS, // TODO: parameterize
+      });
+
       /**
-       * The low TTL is so that the DNS clients and non-authoritative DNS
-       * servers won't cache the record long and you can connect quicker after
-       * the IP updates.
+       * Give cloudwatch permission to invoke our lambda when our subscription filter
+       * picks up DNS queries.
        */
-      ttl: Duration.seconds(30),
-      recordName: subdomain,
-      zone: rootHostedZone,
-    });
+      launcherLambda.addPermission('CWPermission-' + key, {
+        principal: new iam.ServicePrincipal(
+          `logs.${constants.DOMAIN_STACK_REGION}.amazonaws.com`
+        ),
+        action: 'lambda:InvokeFunction',
+        sourceAccount: this.account,
+        sourceArn: queryLogGroup.logGroupArn,
+      });
 
-    /* Set dependency on A record to ensure it is removed first on deletion */
-    aRecord.node.addDependency(rootHostedZone);
+      /**
+       * Create our log subscription filter to catch any log events containing
+       * our subdomain name and send them to our launcher lambda.
+       *
+       * Java supports SRV records so we can create a more precise filter
+       * unfortunately Minecraft Bedrock does not support this yet.
+       */
+      const dnsFilterPattern = config.minecraftEdition === "java"
+      ? `_minecraft._tcp.${key}.${config.subdomainPart}.${config.domainName}`
+      : `${key}.${subdomain}`;
 
-    const launcherLambda = new lambda.Function(this, 'LauncherLambda', {
-      code: lambda.Code.fromAsset(path.resolve(__dirname, '../../lambda')),
-      handler: 'lambda_function.lambda_handler',
-      runtime: lambda.Runtime.PYTHON_3_8,
-      environment: {
-        REGION: config.serverRegion,
-        CLUSTER: constants.CLUSTER_NAME,
-        SERVICE: constants.SERVICE_NAME,
-      },
-      logRetention: logs.RetentionDays.THREE_DAYS, // TODO: parameterize
-    });
+      if ( thisMinecrafServertDef.cloudWatchTriggerEnabled ) {
+        queryLogGroup.addSubscriptionFilter('SubscriptionFilter-' + key, {
+          destination: new logDestinations.LambdaDestination(launcherLambda),
+          filterPattern: logs.FilterPattern.anyTerm(dnsFilterPattern),
+        });
+      }
 
-    /**
-     * Give cloudwatch permission to invoke our lambda when our subscription filter
-     * picks up DNS queries.
-     */
-    launcherLambda.addPermission('CWPermission', {
-      principal: new iam.ServicePrincipal(
-        `logs.${constants.DOMAIN_STACK_REGION}.amazonaws.com`
-      ),
-      action: 'lambda:InvokeFunction',
-      sourceAccount: this.account,
-      sourceArn: queryLogGroup.logGroupArn,
-    });
+      /**
+       * Add the ARN for the launcher lambda execution role to SSM so we can
+       * attach the policy for accessing the minecraft server after it has been
+       * created.
+       */
+      new ssm.StringParameter(this, 'LauncherLambdaParam-' + key, {
+        allowedPattern: '.*S.*',
+        description: 'Minecraft launcher execution role ARN',
+        parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER + '-' + key,
+        stringValue: launcherLambda.role?.roleArn || '',
+      });
 
-    /**
-     * Create our log subscription filter to catch any log events containing
-     * our subdomain name and send them to our launcher lambda.
-     *
-     * Java supports SRV records so we can create a more precise filter
-     * unfortunately Minecraft Bedrock does not support this yet.
-     */
-    const dnsFilterPattern = config.minecraftEdition === "java"
-    ? `_minecraft._tcp.${config.subdomainPart}.${config.domainName}`
-    : subdomain;
-
-    queryLogGroup.addSubscriptionFilter('SubscriptionFilter', {
-      destination: new logDestinations.LambdaDestination(launcherLambda),
-      filterPattern: logs.FilterPattern.anyTerm(dnsFilterPattern),
-    });
+    })
 
     /**
      * Add the subdomain hosted zone ID to SSM since we cannot consume a cross-stack
@@ -144,16 +166,5 @@ export class DomainStack extends Stack {
       stringValue: rootHostedZone.hostedZoneId,
     });
 
-    /**
-     * Add the ARN for the launcher lambda execution role to SSM so we can
-     * attach the policy for accessing the minecraft server after it has been
-     * created.
-     */
-    new ssm.StringParameter(this, 'LauncherLambdaParam', {
-      allowedPattern: '.*S.*',
-      description: 'Minecraft launcher execution role ARN',
-      parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER,
-      stringValue: launcherLambda.role?.roleArn || '',
-    });
   }
 }

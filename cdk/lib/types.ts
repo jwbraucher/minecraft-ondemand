@@ -30,6 +30,13 @@ export type MinecraftImageEnv = Record<string, string>;
 
 export type MinecraftEdition = 'java' | 'bedrock';
 
+export interface MinecraftServerDef {
+  cloudWatchTriggerEnabled: boolean
+  containerEnv: Record<String, String>
+}
+
+export type MinecraftServerDefs = Record<string, MinecraftServerDef>;
+
 export interface StackConfig {
   /**
    * **Required**. Domain name of existing Route53 Hosted Zone
@@ -145,6 +152,11 @@ export interface StackConfig {
    * - CloudWatch Logs for the `minecraft-ecsfargate-watchdog` ECS Container
    */
   debug: boolean;
+
+  /**
+   * Map of minecraft server definitions, each representing a separate minecraft server (world)
+   */
+  minecraftServerDefs: MinecraftServerDefs;
 }
 
 export interface MinecraftEditionConfig {

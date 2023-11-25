@@ -15,7 +15,7 @@ import {
 import { Construct } from 'constructs';
 import { constants } from './constants';
 import { SSMParameterReader } from './ssm-parameter-reader';
-import { StackConfig } from './types';
+import { StackConfig, MinecraftServerDef } from './types';
 import { getMinecraftServerConfig, isDockerInstalled } from './util';
 
 interface MinecraftStackProps extends StackProps {
@@ -111,43 +111,6 @@ export class MinecraftStack extends Stack {
       }
     );
 
-    const minecraftServerConfig = getMinecraftServerConfig(
-      config.minecraftEdition
-    );
-
-    const minecraftServerContainer = new ecs.ContainerDefinition(
-      this,
-      'ServerContainer',
-      {
-        containerName: constants.MC_SERVER_CONTAINER_NAME,
-        image: ecs.ContainerImage.fromRegistry(minecraftServerConfig.image),
-        portMappings: [
-          {
-            containerPort: minecraftServerConfig.port,
-            hostPort: minecraftServerConfig.port,
-            protocol: minecraftServerConfig.protocol,
-          },
-        ],
-        environment: config.minecraftImageEnv,
-        entryPoint: [ '/minecraft/start.sh' ],
-        essential: true,
-        pseudoTerminal: true,
-        taskDefinition,
-        logging: config.debug
-          ? new ecs.AwsLogDriver({
-              logRetention: logs.RetentionDays.THREE_DAYS,
-              streamPrefix: constants.MC_SERVER_CONTAINER_NAME,
-            })
-          : undefined,
-      }
-    );
-
-    minecraftServerContainer.addMountPoints({
-      containerPath: '/minecraft',
-      sourceVolume: constants.ECS_VOLUME_NAME,
-      readOnly: false,
-    });
-
     const serviceSecurityGroup = new ec2.SecurityGroup(
       this,
       'ServiceSecurityGroup',
@@ -155,39 +118,6 @@ export class MinecraftStack extends Stack {
         vpc,
         description: 'Security group for Minecraft on-demand',
       }
-    );
-
-    serviceSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      minecraftServerConfig.ingressRulePort
-    );
-
-    const minecraftServerService = new ecs.FargateService(
-      this,
-      'FargateService',
-      {
-        cluster,
-        capacityProviderStrategies: [
-          {
-            capacityProvider: config.useFargateSpot
-              ? 'FARGATE_SPOT'
-              : 'FARGATE',
-            weight: 1,
-            base: 1,
-          },
-        ],
-        taskDefinition: taskDefinition,
-        platformVersion: ecs.FargatePlatformVersion.LATEST,
-        serviceName: constants.SERVICE_NAME,
-        desiredCount: 0,
-        assignPublicIp: true,
-        securityGroups: [serviceSecurityGroup],
-      }
-    );
-
-    /* Allow access to EFS from Fargate service security group */
-    fileSystem.connections.allowDefaultPortFrom(
-      minecraftServerService.connections
     );
 
     const hostedZoneId = new SSMParameterReader(
@@ -219,111 +149,6 @@ export class MinecraftStack extends Stack {
       );
       snsTopicArn = snsTopic.topicArn;
     }
-
-    const watchdogContainer = new ecs.ContainerDefinition(
-      this,
-      'WatchDogContainer',
-      {
-        containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME,
-        image: isDockerInstalled()
-          ? ecs.ContainerImage.fromAsset(
-              path.resolve(__dirname, '../../minecraft-ecsfargate-watchdog/')
-            )
-          : ecs.ContainerImage.fromRegistry(
-              'doctorray/minecraft-ecsfargate-watchdog'
-            ),
-        essential: true,
-        taskDefinition: taskDefinition,
-        environment: {
-          CLUSTER: constants.CLUSTER_NAME,
-          SERVICE: constants.SERVICE_NAME,
-          DNSZONE: hostedZoneId,
-          SERVERNAME: `${config.subdomainPart}.${config.domainName}`,
-          SNSTOPIC: snsTopicArn,
-          TWILIOFROM: config.twilio.phoneFrom,
-          TWILIOTO: config.twilio.phoneTo,
-          TWILIOAID: config.twilio.accountId,
-          TWILIOAUTH: config.twilio.authCode,
-          STARTUPMIN: config.startupMinutes,
-          SHUTDOWNMIN: config.shutdownMinutes,
-        },
-        logging: config.debug
-          ? new ecs.AwsLogDriver({
-              logRetention: logs.RetentionDays.THREE_DAYS,
-              streamPrefix: constants.WATCHDOG_SERVER_CONTAINER_NAME,
-            })
-          : undefined,
-      }
-    );
-
-    const serviceControlPolicy = new iam.Policy(this, 'ServiceControlPolicy', {
-      statements: [
-        new iam.PolicyStatement({
-          sid: 'AllowAllOnServiceAndTask',
-          effect: iam.Effect.ALLOW,
-          actions: ['ecs:*'],
-          resources: [
-            minecraftServerService.serviceArn,
-            /* arn:aws:ecs:<region>:<account_number>:task/minecraft/* */
-            Arn.format(
-              {
-                service: 'ecs',
-                resource: 'task',
-                resourceName: `${constants.CLUSTER_NAME}/*`,
-                arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
-              },
-              this
-            ),
-          ],
-        }),
-        new iam.PolicyStatement({
-          effect: iam.Effect.ALLOW,
-          actions: ['ec2:DescribeNetworkInterfaces'],
-          resources: ['*'],
-        }),
-      ],
-    });
-
-    serviceControlPolicy.attachToRole(ecsTaskRole);
-
-    /**
-     * Add service control policy to the launcher lambda from the other stack
-     */
-    const launcherLambdaRoleArn = new SSMParameterReader(
-      this,
-      'launcherLambdaRoleArn',
-      {
-        parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER,
-        region: constants.DOMAIN_STACK_REGION,
-      }
-    ).getParameterValue();
-    const launcherLambdaRole = iam.Role.fromRoleArn(
-      this,
-      'LauncherLambdaRole',
-      launcherLambdaRoleArn
-    );
-    serviceControlPolicy.attachToRole(launcherLambdaRole);
-
-    /**
-     * This policy gives permission to our ECS task to update the A record
-     * associated with our minecraft server. Retrieve the hosted zone identifier
-     * from Route 53 and place it in the Resource line within this policy.
-     */
-    const iamRoute53Policy = new iam.Policy(this, 'IamRoute53Policy', {
-      statements: [
-        new iam.PolicyStatement({
-          sid: 'AllowEditRecordSets',
-          effect: iam.Effect.ALLOW,
-          actions: [
-            'route53:GetHostedZone',
-            'route53:ChangeResourceRecordSets',
-            'route53:ListResourceRecordSets',
-          ],
-          resources: [`arn:aws:route53:::hostedzone/${hostedZoneId}`],
-        }),
-      ],
-    });
-    iamRoute53Policy.attachToRole(ecsTaskRole);
 
     const efsMaintenanceInstanceRole = new iam.Role(this, 'EFSMaintenanceRole', {
       assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -402,11 +227,191 @@ runcmd:
       role: efsMaintenanceInstanceRole,
       spotOptions: {
         interruptionBehavior: ec2.SpotInstanceInterruption.TERMINATE,
-        requestType: ec2.SpotRequestType.ONE_TIME
+        requestType: ec2.SpotRequestType.ONE_TIME,
       },
       securityGroup: efsMaintenanceSecurityGroup,
-      instanceInitiatedShutdownBehavior: ec2.InstanceInitiatedShutdownBehavior.TERMINATE
+      instanceInitiatedShutdownBehavior: ec2.InstanceInitiatedShutdownBehavior.TERMINATE,
     });
 
+    /* The remaining statements are exectued for each Minecraft server in the config */
+    Array.from(Object.keys(config.minecraftServerDefs)).forEach(key => {
+      const thisMinecraftServerDef: MinecraftServerDef = config.minecraftServerDefs[key]
+
+      const minecraftServerConfig = getMinecraftServerConfig(
+        config.minecraftEdition
+      );
+
+      serviceSecurityGroup.addIngressRule(
+        ec2.Peer.anyIpv4(),
+        minecraftServerConfig.ingressRulePort,
+        'Minecraft-Server-Ingress-' + key,
+      );
+
+      const minecraftServerContainer = new ecs.ContainerDefinition(
+        this,
+        'ServerContainer-' + key,
+        {
+          containerName: constants.MC_SERVER_CONTAINER_NAME,
+          image: ecs.ContainerImage.fromRegistry(minecraftServerConfig.image),
+          portMappings: [
+            {
+              containerPort: minecraftServerConfig.port,
+              hostPort: minecraftServerConfig.port,
+              protocol: minecraftServerConfig.protocol,
+            },
+          ],
+          environment: thisMinecraftServerDef.containerEnv,
+          entryPoint: [ '/minecraft/start.sh' ],
+          essential: true,
+          pseudoTerminal: true,
+          taskDefinition,
+          logging: config.debug
+            ? new ecs.AwsLogDriver({
+                logRetention: logs.RetentionDays.THREE_DAYS,
+                streamPrefix: constants.MC_SERVER_CONTAINER_NAME,
+              })
+            : undefined,
+        }
+      );
+
+      minecraftServerContainer.addMountPoints({
+        containerPath: '/minecraft',
+        sourceVolume: constants.ECS_VOLUME_NAME,
+        readOnly: false,
+      });
+
+      const minecraftServerService = new ecs.FargateService(
+        this,
+        'FargateService-' + key,
+        {
+          cluster,
+          capacityProviderStrategies: [
+            {
+              capacityProvider: config.useFargateSpot
+                ? 'FARGATE_SPOT'
+                : 'FARGATE',
+              weight: 1,
+              base: 1,
+            },
+          ],
+          taskDefinition: taskDefinition,
+          platformVersion: ecs.FargatePlatformVersion.LATEST,
+          serviceName: constants.SERVICE_NAME,
+          desiredCount: 0,
+          assignPublicIp: true,
+          securityGroups: [serviceSecurityGroup],
+        }
+      );
+
+      /* Allow access to EFS from Fargate service security group */
+      fileSystem.connections.allowDefaultPortFrom(
+        minecraftServerService.connections
+      );
+
+      const watchdogContainer = new ecs.ContainerDefinition(
+        this,
+        'WatchDogContainer-' + key,
+        {
+          containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME,
+          image: isDockerInstalled()
+            ? ecs.ContainerImage.fromAsset(
+                path.resolve(__dirname, '../../minecraft-ecsfargate-watchdog/')
+              )
+            : ecs.ContainerImage.fromRegistry(
+                'doctorray/minecraft-ecsfargate-watchdog'
+              ),
+          essential: true,
+          taskDefinition: taskDefinition,
+          environment: {
+            CLUSTER: constants.CLUSTER_NAME,
+            SERVICE: constants.SERVICE_NAME,
+            DNSZONE: hostedZoneId,
+            SERVERNAME: `${config.subdomainPart}.${config.domainName}`,
+            SNSTOPIC: snsTopicArn,
+            TWILIOFROM: config.twilio.phoneFrom,
+            TWILIOTO: config.twilio.phoneTo,
+            TWILIOAID: config.twilio.accountId,
+            TWILIOAUTH: config.twilio.authCode,
+            STARTUPMIN: config.startupMinutes,
+            SHUTDOWNMIN: config.shutdownMinutes,
+          },
+          logging: config.debug
+            ? new ecs.AwsLogDriver({
+                logRetention: logs.RetentionDays.THREE_DAYS,
+                streamPrefix: constants.WATCHDOG_SERVER_CONTAINER_NAME,
+              })
+            : undefined,
+        }
+      );
+
+      const serviceControlPolicy = new iam.Policy(this, 'ServiceControlPolicy-' + key, {
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'AllowAllOnServiceAndTask',
+            effect: iam.Effect.ALLOW,
+            actions: ['ecs:*'],
+            resources: [
+              minecraftServerService.serviceArn,
+              /* arn:aws:ecs:<region>:<account_number>:task/minecraft/* */
+              Arn.format(
+                {
+                  service: 'ecs',
+                  resource: 'task',
+                  resourceName: `${constants.CLUSTER_NAME}/*`,
+                  arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+                },
+                this
+              ),
+            ],
+          }),
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ['ec2:DescribeNetworkInterfaces'],
+            resources: ['*'],
+          }),
+        ],
+      });
+
+      serviceControlPolicy.attachToRole(ecsTaskRole);
+
+      /**
+       * Add service control policy to the launcher lambda from the other stack
+       */
+      const launcherLambdaRoleArn = new SSMParameterReader(
+        this,
+        'launcherLambdaRoleArn-' + key,
+        {
+          parameterName: constants.LAUNCHER_LAMBDA_ARN_SSM_PARAMETER + '-' + key,
+          region: constants.DOMAIN_STACK_REGION,
+        }
+      ).getParameterValue();
+      const launcherLambdaRole = iam.Role.fromRoleArn(
+        this,
+        'LauncherLambdaRole',
+        launcherLambdaRoleArn
+      );
+      serviceControlPolicy.attachToRole(launcherLambdaRole);
+
+      /**
+       * This policy gives permission to our ECS task to update the A record
+       * associated with our minecraft server. Retrieve the hosted zone identifier
+       * from Route 53 and place it in the Resource line within this policy.
+       */
+      const iamRoute53Policy = new iam.Policy(this, 'IamRoute53Policy-' + key, {
+        statements: [
+          new iam.PolicyStatement({
+            sid: 'AllowEditRecordSets',
+            effect: iam.Effect.ALLOW,
+            actions: [
+              'route53:GetHostedZone',
+              'route53:ChangeResourceRecordSets',
+              'route53:ListResourceRecordSets',
+            ],
+            resources: [`arn:aws:route53:::hostedzone/${hostedZoneId}`],
+          }),
+        ],
+      });
+      iamRoute53Policy.attachToRole(ecsTaskRole);
+    })
   }
 }

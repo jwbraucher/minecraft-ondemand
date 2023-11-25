@@ -1,12 +1,12 @@
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { MinecraftImageEnv, StackConfig } from './types';
+import { MinecraftImageEnv, MinecraftServerDefs, StackConfig } from './types';
 import { stringAsBoolean } from './util';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const resolveMinecraftEnvVars = (json = ''): MinecraftImageEnv => {
-  const defaults = { EULA: 'TRUE' };
+  const defaults = {};
   try {
     return {
       ...defaults,
@@ -16,6 +16,21 @@ const resolveMinecraftEnvVars = (json = ''): MinecraftImageEnv => {
     console.error(
       'Unable to resolve .env value for MINECRAFT_IMAGE_ENV_VARS_JSON.\
       Defaults will be used'
+    );
+    return defaults;
+  }
+};
+
+const resolveMinecraftServerDefs = (json = ''): MinecraftServerDefs => {
+  const defaults = {};
+  try {
+    return {
+      ...defaults,
+      ...JSON.parse(json),
+    };
+  } catch (e) {
+    console.error(
+      'Error: Unable to resolve .env value for MINECRAFT_SERVER_DEFS_JSON.'
     );
     return defaults;
   }
@@ -44,4 +59,7 @@ export const resolveConfig = (): StackConfig => ({
     authCode: process.env.TWILIO_AUTH_CODE || '',
   },
   debug: stringAsBoolean(process.env.DEBUG) || false,
+  minecraftServerDefs: resolveMinecraftServerDefs(
+    process.env.MINECRAFT_SERVER_DEFS_JSON
+  ),
 });
