@@ -98,7 +98,9 @@ export class DomainStack extends Stack {
       /* Set dependency on A record to ensure it is removed first on deletion */
       aRecords[aRecords.length-1].node.addDependency(rootHostedZone);
 
+      /* Create launcher lambda and optionally add a function url */
       const launcherLambda = new lambda.Function(this, 'LauncherLambda-' + key, {
+        functionName: "minecraft-launcher-" + key,
         code: lambda.Code.fromAsset(path.resolve(__dirname, '../../lambda')),
         handler: 'lambda_function.lambda_handler',
         runtime: lambda.Runtime.PYTHON_3_8,
@@ -109,6 +111,9 @@ export class DomainStack extends Stack {
         },
         logRetention: logs.RetentionDays.THREE_DAYS, // TODO: parameterize
       });
+      if(thisMinecrafServertDef.functionUrlEnabled) {
+        launcherLambda.addFunctionUrl()
+      }
 
       /**
        * Give cloudwatch permission to invoke our lambda when our subscription filter

@@ -32,6 +32,7 @@ export type MinecraftEdition = 'java' | 'bedrock';
 
 export interface MinecraftServerDef {
   cloudWatchTriggerEnabled: boolean
+  functionUrlEnabled: boolean
   containerEnv: Record<String, String>
 }
 
