@@ -29,7 +29,8 @@ function zero_service ()
 {
   send_notification shutdown
   echo Setting desired task count to zero.
-  aws ecs update-service --cluster $CLUSTER --service $SERVICE --desired-count 0
+  set -x
+  aws ecs update-service --cluster $CLUSTER --service $SERVICE --desired-count 0 >/dev/null 2>&1
   exit 0
 }
 
