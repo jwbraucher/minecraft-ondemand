@@ -112,7 +112,9 @@ export class DomainStack extends Stack {
         logRetention: logs.RetentionDays.THREE_DAYS, // TODO: parameterize
       });
       if(thisMinecrafServertDef.functionUrlEnabled) {
-        launcherLambda.addFunctionUrl()
+        launcherLambda.addFunctionUrl({
+          authType: lambda.FunctionUrlAuthType.NONE,
+        });
       }
 
       /**
