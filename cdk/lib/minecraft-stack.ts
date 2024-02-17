@@ -261,7 +261,7 @@ runcmd:
             },
           ],
           environment: thisMinecraftServerDef.containerEnv,
-          entryPoint: [ '/minecraft/start.sh' ],
+          entryPoint: [ '/minecraft/minecraft.sh' ],
           essential: true,
           pseudoTerminal: true,
           taskDefinition,
@@ -320,6 +320,7 @@ runcmd:
             : ecs.ContainerImage.fromRegistry(
                 'doctorray/minecraft-ecsfargate-watchdog'
               ),
+          entryPoint: [ '/minecraft/watchdog.sh' ],
           essential: true,
           taskDefinition: taskDefinition,
           environment: {
@@ -343,6 +344,12 @@ runcmd:
             : undefined,
         }
       );
+
+      watchdogContainer.addMountPoints({
+        containerPath: '/minecraft',
+        sourceVolume: constants.ECS_VOLUME_NAME,
+        readOnly: false,
+      });
 
       const serviceControlPolicy = new iam.Policy(this, 'ServiceControlPolicy-' + key, {
         statements: [

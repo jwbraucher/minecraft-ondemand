@@ -42,6 +42,38 @@ function sigterm ()
 }
 trap sigterm SIGTERM
 
+function bedrock_ping_init ()
+{
+
+  PINGA="\x01" ## uncommitted ping
+  PINGB="\x00\x00\x00\x00\x00\x00\x4e\x20" ## time since start in ms.  20 seconds sounds good
+  PINGC="\x00\xff\xff\x00\xfe\xfe\xfe\xfe\xfd\xfd\xfd\xfd\x12\x34\x56\x78" ## offline message data id
+  PINGD=$(for i in $(seq 1 8); do echo -en "\x5c\x78" ; tr -dc 'a-f0-9' < /dev/urandom | head -c2; done) ## random client guid
+  BEDROCKPING=$PINGA$PINGB$PINGC$PINGD
+  echo "Bedrock ping string is $BEDROCKPING"
+
+}
+
+function bedrock_ping ()
+{
+    RESPONSE=$((echo -en "$BEDROCKPING" && sleep 1) | ncat -w 1 -u 127.0.0.1 19132 | sed -E 's,.*([0-9][0-9]*[.][0-9][0-9]*[.][0-9][0-9]*),\1,')
+    echo "Response from server was $RESPONSE"
+    CONNECTIONS=$(echo $RESPONSE | awk -F\; '{ print $2 }')
+    [ -n "$CONNECTIONS" ] || CONNECTIONS=0
+    if ((CONNECTIONS<1)); then
+      CONNECTIONS=0
+    fi
+
+}
+
+function get_connections ()
+{
+
+  [ "$EDITION" == "java" ] && CONNECTIONS=$(netstat -atn | grep :25565 | grep ESTABLISHED | wc -l)
+  [ "$EDITION" == "bedrock" ] && bedrock_ping
+
+}
+
 ## get task id from the Fargate metadata
 TASK=$(curl -s ${ECS_CONTAINER_METADATA_URI_V4}/task | jq -r '.TaskARN' | awk -F/ '{ print $NF }')
 echo I believe our task id is $TASK
@@ -114,15 +146,7 @@ then
   done
 fi
 
-if [ "$EDITION" == "bedrock" ]
-then
-  PINGA="\x01" ## uncommitted ping
-  PINGB="\x00\x00\x00\x00\x00\x00\x4e\x20" ## time since start in ms.  20 seconds sounds good
-  PINGC="\x00\xff\xff\x00\xfe\xfe\xfe\xfe\xfd\xfd\xfd\xfd\x12\x34\x56\x78" ## offline message data id
-  PINGD=$(for i in $(seq 1 8); do echo -en "\x5c\x78" ; tr -dc 'a-f0-9' < /dev/urandom | head -c2; done) ## random client guid
-  BEDROCKPING=$PINGA$PINGB$PINGC$PINGD
-  echo "Bedrock ping string is $BEDROCKPING"
-fi
+if [ "$EDITION" == "bedrock" ]; then bedrock_ping_init; fi
 
 ## Send startup notification message
 send_notification startup
@@ -133,9 +157,7 @@ CONNECTED=0
 while [ $CONNECTED -lt 1 ]
 do
   echo Waiting for connection, minute $COUNTER out of $STARTUPMIN...
-  [ "$EDITION" == "java" ] && CONNECTIONS=$(netstat -atn | grep :25565 | grep ESTABLISHED | wc -l)
-  [ "$EDITION" == "bedrock" ] && CONNECTIONS=$((echo -en "$BEDROCKPING" && sleep 1) | ncat -w 1 -u 127.0.0.1 19132 | cut -c34- | awk -F\; '{ print $5 }')
-  [ -n "$CONNECTIONS" ] || CONNECTIONS=0
+  get_connections
   CONNECTED=$(($CONNECTED + $CONNECTIONS))
   COUNTER=$(($COUNTER + 1))
   if [ $CONNECTED -gt 0 ] ## at least one active connection detected, break out of loop
@@ -155,9 +177,7 @@ echo "We believe a connection has been made, switching to shutdown watcher."
 COUNTER=0
 while [ $COUNTER -le $SHUTDOWNMIN ]
 do
-  [ "$EDITION" == "java" ] && CONNECTIONS=$(netstat -atn | grep :25565 | grep ESTABLISHED | wc -l)
-  [ "$EDITION" == "bedrock" ] && CONNECTIONS=$((echo -en "$BEDROCKPING" && sleep 1) | ncat -w 1 -u 127.0.0.1 19132 | cut -c34- | awk -F\; '{ print $5 }')
-  [ -n "$CONNECTIONS" ] || CONNECTIONS=0
+  get_connections
   if [ $CONNECTIONS -lt 1 ]
   then
     echo "No active connections detected, $COUNTER out of $SHUTDOWNMIN minutes..."
