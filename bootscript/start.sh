@@ -1,15 +1,22 @@
-#!/bin/bash -x
+#!/bin/bash
 #Minecraft Bedrock Docker server startup script using screen
 #Author: James A. Chambers - https://jamesachambers.com/legendary-minecraft-bedrock-container/
 #GitHub Repository: https://github.com/TheRemote/Legendary-Bedrock-Container
+
+DATA_SUBPATH="${DATA_SUBPATH:-default}"
+DATA_PATH_BASE="/minecraft"
+DATA_PATH="${DATA_PATH_BASE}"
+if [ "${DATA_SUBPATH}" != "default" ]; then
+  DATA_PATH="${DATA_PATH_BASE}/${DATA_SUBPATH}"
+fi
 
 echo "Minecraft Bedrock Server Docker script by James A. Chambers"
 echo "Latest version always at https://github.com/TheRemote/Legendary-Bedrock-Container"
 echo "Don't forget to set up port forwarding on your router!  The default port is 19132"
 
-if [ ! -d '/minecraft' ]; then
+if [ ! -d "${DATA_PATH}" ]; then
     echo "ERROR:  A named volume was not specified for the minecraft server data.  Please create one with: docker volume create yourvolumename"
-    echo "Please pass the new volume to docker like this:  docker run -it -v yourvolumename:/minecraft"
+    echo "Please pass the new volume to docker like this:  docker run -it -v yourvolumename:${DATA_PATH}"
     exit 1
 fi
 
@@ -39,24 +46,24 @@ if screen -list | grep -q "\.minecraftbe"; then
 fi
 
 # Change directory to server directory
-cd /minecraft
+cd ${DATA_PATH}
 
 # If clean switch is specified then remove downloads and version_installed.txt
 if [ -n "$Clean" ]; then
     echo "Cleaning enabled, removing downloads and version_installed.txt..."
-    rm -rf /minecraft/downloads
-    rm -f /minecraft/version_installed.txt
+    rm -rf ${DATA_PATH}/downloads
+    rm -f ${DATA_PATH}/version_installed.txt
 fi
 
 # Create logs/backups/downloads folder if it doesn't exist
-if [ ! -d "/minecraft/logs" ]; then
-    mkdir -p /minecraft/logs
+if [ ! -d "${DATA_PATH}/logs" ]; then
+    mkdir -p ${DATA_PATH}/logs
 fi
-if [ ! -d "/minecraft/downloads" ]; then
-    mkdir -p /minecraft/downloads
+if [ ! -d "${DATA_PATH}/downloads" ]; then
+    mkdir -p ${DATA_PATH}/downloads
 fi
-if [ ! -d "/minecraft/backups" ]; then
-    mkdir -p /minecraft/backups
+if [ ! -d "${DATA_PATH}/backups" ]; then
+    mkdir -p ${DATA_PATH}/backups
 fi
 
 # Check if network interfaces are up
@@ -83,8 +90,8 @@ done
 
 # Take ownership of server files and set correct permissions
 if [ -z "$NoPermCheck" ]; then
-    echo "Taking ownership of all server files/folders in /minecraft..."
-    sudo -n chown -R $(whoami) /minecraft >/dev/null 2>&1
+    echo "Taking ownership of all server files/folders in ${DATA_PATH}..."
+    sudo -n chown -R $(whoami) ${DATA_PATH} >/dev/null 2>&1
     echo "Complete"
 else
     echo "Skipping permissions check due to NoPermCheck flag"
@@ -103,9 +110,9 @@ if [ -d "worlds" ]; then
 fi
 
 # Rotate backups -- keep most recent 10
-if [ -e /minecraft/backups ]; then
+if [ -e ${DATA_PATH}/backups ]; then
     Rotate=$(
-        pushd /minecraft/backups
+        pushd ${DATA_PATH}/backups
         ls -1tr | head -n -$BackupCount | xargs -d '\n' rm -f --
         popd
     )
@@ -125,11 +132,11 @@ if [ "$?" != 0 ]; then
 else
     # Download server index.html to check latest version
     if [ -z "$QuietCurl" ]; then
-        curl -H "Accept-Encoding: identity" -H "Accept-Language: en" -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.$RandNum.212 Safari/537.36" -o /minecraft/downloads/version.html https://www.minecraft.net/en-us/download/server/bedrock
+        curl -H "Accept-Encoding: identity" -H "Accept-Language: en" -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.$RandNum.212 Safari/537.36" -o ${DATA_PATH}/downloads/version.html https://www.minecraft.net/en-us/download/server/bedrock
     else
-        curl --no-progress-meter -H "Accept-Encoding: identity" -H "Accept-Language: en" -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.$RandNum.212 Safari/537.36" -o /minecraft/downloads/version.html https://www.minecraft.net/en-us/download/server/bedrock
+        curl --no-progress-meter -H "Accept-Encoding: identity" -H "Accept-Language: en" -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.$RandNum.212 Safari/537.36" -o ${DATA_PATH}/downloads/version.html https://www.minecraft.net/en-us/download/server/bedrock
     fi
-    LatestURL=$(grep -o 'https://www.minecraft.net/bedrockdedicatedserver/bin-linux/[^"]*' downloads/version.html)
+    LatestURL=$(grep -o 'https://minecraft.azureedge.net/bin-linux/[^"]*' downloads/version.html)
 
     LatestFile=$(echo "$LatestURL" | sed 's#.*/##')
 
@@ -149,7 +156,7 @@ else
     elif [ ! -z "$PinFile" ]; then
         echo "Installing $PinFile"
         DownloadFile=$PinFile
-        DownloadURL="https://www.minecraft.net/bedrockdedicatedserver/bin-linux/$PinFile"
+        DownloadURL="https://minecraft.azureedge.net/bin-linux/$PinFile"
 
         # Download version of Minecraft Bedrock dedicated server if it's not already local
         if [ ! -f "downloads/$DownloadFile" ]; then
@@ -163,8 +170,8 @@ else
         # Install version of Minecraft requested
         if [ ! -z "$DownloadFile" ]; then
             unzip -o "downloads/$DownloadFile" -x "*server.properties*" "*permissions.json*" "*whitelist.json*" "*valid_known_packs.json*" "*allowlist.json*"
-            Permissions=$(chmod u+x /minecraft/bedrock_server >/dev/null)
-            echo "$DownloadFile" >/minecraft/version_installed.txt
+            Permissions=$(chmod u+x ${DATA_PATH}/bedrock_server >/dev/null)
+            echo "$DownloadFile" >${DATA_PATH}/version_installed.txt
         fi
     elif [[ "$InstalledFile" == "$LatestFile" ]]; then
         echo "Latest version $LatestFile is already installed"
@@ -185,27 +192,27 @@ else
         # Install version of Minecraft requested
         if [ ! -z "$DownloadFile" ]; then
             unzip -o "downloads/$DownloadFile" -x "*server.properties*" "*permissions.json*" "*whitelist.json*" "*valid_known_packs.json*" "*allowlist.json*"
-            Permissions=$(chmod u+x /minecraft/bedrock_server >/dev/null)
-            echo "$DownloadFile" >/minecraft/version_installed.txt
+            Permissions=$(chmod u+x ${DATA_PATH}/bedrock_server >/dev/null)
+            echo "$DownloadFile" >${DATA_PATH}/version_installed.txt
         fi
     fi
 fi
 
-if [ ! -e /minecraft/server.properties ]; then
-    cp -rf /scripts/server.properties /minecraft/server.properties
+if [ ! -e ${DATA_PATH}/server.properties ]; then
+    cp -rf /scripts/server.properties ${DATA_PATH}/server.properties
 fi
 
-if [ ! -e /minecraft/allowlist.json ]; then
-    cp -rf /scripts/allowlist.json /minecraft/allowlist.json
+if [ ! -e ${DATA_PATH}/allowlist.json ]; then
+    cp -rf /scripts/allowlist.json ${DATA_PATH}/allowlist.json
 fi
 
-if [ ! -e /minecraft/permissions.json ]; then
-    cp -rf /scripts/permissions.json /minecraft/permissions.json
+if [ ! -e ${DATA_PATH}/permissions.json ]; then
+    cp -rf /scripts/permissions.json ${DATA_PATH}/permissions.json
 fi
 
 # Change ports in server.properties
-sed -i "/server-port=/c\server-port=$PortIPV4" /minecraft/server.properties
-sed -i "/server-portv6=/c\server-portv6=$PortIPV6" /minecraft/server.properties
+sed -i "/server-port=/c\server-port=$PortIPV4" ${DATA_PATH}/server.properties
+sed -i "/server-portv6=/c\server-portv6=$PortIPV6" ${DATA_PATH}/server.properties
 
 # Start server
 echo "Starting Minecraft server..."
