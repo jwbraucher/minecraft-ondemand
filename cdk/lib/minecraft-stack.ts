@@ -229,8 +229,8 @@ runcmd:
         'TaskDefinition-' + key,
         {
           taskRole: ecsTaskRole,
-          memoryLimitMiB: config.taskMemory,
-          cpu: config.taskCpu,
+          memoryLimitMiB: thisMinecraftServerDef.memory,
+          cpu: thisMinecraftServerDef.cpu,
           volumes: [
             {
               name: constants.ECS_VOLUME_NAME,

@@ -103,7 +103,7 @@ export class DomainStack extends Stack {
         functionName: "minecraft-launcher-" + key,
         code: lambda.Code.fromAsset(path.resolve(__dirname, '../../lambda')),
         handler: 'lambda_function.lambda_handler',
-        runtime: lambda.Runtime.PYTHON_3_8,
+        runtime: lambda.Runtime.PYTHON_3_12,
         environment: {
           REGION: config.serverRegion,
           CLUSTER: constants.CLUSTER_NAME,
