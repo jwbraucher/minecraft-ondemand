@@ -18,6 +18,7 @@ import { constants } from './constants';
 import { CWGlobalResourcePolicy } from './cw-global-resource-policy';
 import { RetentionDays } from 'aws-cdk-lib/aws-logs';
 import { StackConfig, MinecraftServerDef } from './types';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 
 interface DomainStackProps extends StackProps {
   config: Readonly<StackConfig>;
@@ -98,6 +99,11 @@ export class DomainStack extends Stack {
       /* Set dependency on A record to ensure it is removed first on deletion */
       aRecords[aRecords.length-1].node.addDependency(rootHostedZone);
 
+      const logGroup = new LogGroup(this, 'LogGroup-domain-stack-' + key, {
+        logGroupName: 'domain-stack-' + key,
+        retention: logs.RetentionDays.THREE_DAYS,
+      });
+
       /* Create launcher lambda and optionally add a function url */
       const launcherLambda = new lambda.Function(this, 'LauncherLambda-' + key, {
         functionName: "minecraft-launcher-" + key,
@@ -109,7 +115,7 @@ export class DomainStack extends Stack {
           CLUSTER: constants.CLUSTER_NAME,
           SERVICE: constants.SERVICE_NAME + '-' + key,
         },
-        logRetention: logs.RetentionDays.THREE_DAYS, // TODO: parameterize
+        logGroup: logGroup,
       });
       if(thisMinecrafServertDef.functionUrlEnabled) {
         launcherLambda.addFunctionUrl({

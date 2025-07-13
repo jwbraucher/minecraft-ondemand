@@ -17,6 +17,7 @@ import { constants } from './constants';
 import { SSMParameterReader } from './ssm-parameter-reader';
 import { StackConfig, MinecraftServerDef } from './types';
 import { getMinecraftServerConfig, isDockerInstalled } from './util';
+import { LogGroup } from 'aws-cdk-lib/aws-logs';
 
 interface MinecraftStackProps extends StackProps {
   config: Readonly<StackConfig>;
@@ -84,7 +85,6 @@ export class MinecraftStack extends Stack {
     const cluster = new ecs.Cluster(this, 'Cluster', {
       clusterName: constants.CLUSTER_NAME,
       vpc,
-      containerInsights: false, // TODO: Add config for container insights
       enableFargateCapacityProviders: true,
     });
 
@@ -224,6 +224,11 @@ runcmd:
         `Minecraft-Server-Ingress-${minecraftServerConfig.ingressRulePort}`,
       );
 
+      const logGroup = new LogGroup(this, 'LogGroup-minecraft-stack-' + key, {
+        logGroupName: 'minecraft-stack-' + key,
+        retention: logs.RetentionDays.THREE_DAYS,
+      });
+
       const taskDefinition = new ecs.FargateTaskDefinition(
         this,
         'TaskDefinition-' + key,
@@ -267,7 +272,7 @@ runcmd:
           taskDefinition,
           logging: config.debug
             ? new ecs.AwsLogDriver({
-                logRetention: logs.RetentionDays.THREE_DAYS,
+                logGroup: logGroup,
                 streamPrefix: constants.MC_SERVER_CONTAINER_NAME,
               })
             : undefined,
@@ -298,6 +303,7 @@ runcmd:
           platformVersion: ecs.FargatePlatformVersion.LATEST,
           serviceName: constants.SERVICE_NAME + '-' + key,
           desiredCount: 0,
+          minHealthyPercent: 50,
           assignPublicIp: true,
           securityGroups: [serviceSecurityGroup],
         }
@@ -338,7 +344,7 @@ runcmd:
           },
           logging: config.debug
             ? new ecs.AwsLogDriver({
-                logRetention: logs.RetentionDays.THREE_DAYS,
+                logGroup: logGroup,
                 streamPrefix: constants.WATCHDOG_SERVER_CONTAINER_NAME,
               })
             : undefined,
