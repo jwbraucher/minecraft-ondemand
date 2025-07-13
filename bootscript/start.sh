@@ -3,6 +3,8 @@
 #Author: James A. Chambers - https://jamesachambers.com/legendary-minecraft-bedrock-container/
 #GitHub Repository: https://github.com/TheRemote/Legendary-Bedrock-Container
 
+DIRECT_DOWNLOAD_URL="${DIRECT_DOWNLOAD_URL}"
+
 DATA_SUBPATH="${DATA_SUBPATH:-default}"
 DATA_PATH_BASE="/minecraft"
 DATA_PATH="${DATA_PATH_BASE}"
@@ -137,6 +139,9 @@ else
         curl --no-progress-meter -H "Accept-Encoding: identity" -H "Accept-Language: en" -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.$RandNum.212 Safari/537.36" -o ${DATA_PATH}/downloads/version.html https://www.minecraft.net/en-us/download/server/bedrock
     fi
     LatestURL=$(grep -o 'https://www.minecraft.net/bedrockdedicatedserver/bin-linux/[^"]*' downloads/version.html)
+    if [[ "${DIRECT_DOWNLOAD_URL}" != "" ]]; then
+      LatestURL="${DIRECT_DOWNLOAD_URL}"
+    fi
 
     LatestFile=$(echo "$LatestURL" | sed 's#.*/##')
 
