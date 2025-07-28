@@ -8,6 +8,8 @@ import {
   aws_ecs as ecs,
   aws_logs as logs,
   aws_sns as sns,
+  aws_lambda as lambda,
+  aws_ecr as ecr,
   RemovalPolicy,
   Arn,
   ArnFormat,
@@ -208,6 +210,30 @@ runcmd:
       },
       securityGroup: efsMaintenanceSecurityGroup,
       instanceInitiatedShutdownBehavior: ec2.InstanceInitiatedShutdownBehavior.TERMINATE,
+    });
+
+    /* Create minecraft download lambda with a function url */
+    const bedrockmeEcr = ecr.Repository.fromRepositoryName(this, 'Repo-BedrockMe', 'braucher/bedrockme');
+
+    const downloadLogGroup = new LogGroup(this, 'LogGroup-minecraft-download-stack', {
+      logGroupName: 'minecraft-download-stack',
+      retention: logs.RetentionDays.THREE_DAYS,
+    });
+
+    const downloadLambda = new lambda.Function(this, 'DownloadLambda', {
+      functionName: "minecraft-download",
+      handler: lambda.Handler.FROM_IMAGE,
+      code: lambda.Code.fromEcrImage(bedrockmeEcr, { tagOrDigest: 'latest' }),
+      environment: {
+        REGION: config.serverRegion,
+        CLUSTER: constants.CLUSTER_NAME,
+        SERVICE: constants.SERVICE_NAME,
+      },
+      logGroup: downloadLogGroup,
+      runtime: lambda.Runtime.FROM_IMAGE,
+    });
+    downloadLambda.addFunctionUrl({
+      authType: lambda.FunctionUrlAuthType.NONE,
     });
 
     /* The remaining statements are exectued for each Minecraft server in the config */
@@ -425,6 +451,7 @@ runcmd:
         ],
       });
       iamRoute53Policy.attachToRole(ecsTaskRole);
+
     })
   }
 }
