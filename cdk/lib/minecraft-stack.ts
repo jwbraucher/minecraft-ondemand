@@ -13,6 +13,7 @@ import {
   RemovalPolicy,
   Arn,
   ArnFormat,
+  Duration,
 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { constants } from './constants';
@@ -223,11 +224,14 @@ runcmd:
     const downloadLambda = new lambda.Function(this, 'DownloadLambda', {
       functionName: "minecraft-download",
       handler: lambda.Handler.FROM_IMAGE,
-      code: lambda.Code.fromEcrImage(bedrockmeEcr, { tagOrDigest: 'latest' }),
+      code: lambda.Code.fromEcrImage(bedrockmeEcr, { tagOrDigest: '20251116-1' }),
+      memorySize: 512,
+      timeout: Duration.seconds(60),
       environment: {
         REGION: config.serverRegion,
         CLUSTER: constants.CLUSTER_NAME,
         SERVICE: constants.SERVICE_NAME,
+        HOME: '/tmp/home',
       },
       logGroup: downloadLogGroup,
       runtime: lambda.Runtime.FROM_IMAGE,
