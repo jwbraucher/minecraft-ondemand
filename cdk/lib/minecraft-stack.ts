@@ -282,6 +282,31 @@ runcmd:
         }
       );
 
+      const bedrockMeContainer = new ecs.ContainerDefinition(
+        this,
+        'bedrockMeContainer-' + key,
+        {
+          containerName: constants.BEDROCK_ME_CONTAINER_NAME + '-' + key,
+          image: ecs.ContainerImage.fromRegistry(constants.BEDROCK_ME_CONTAINER_IMAGE),
+          environment: thisMinecraftServerDef.containerEnv,
+          essential: false,
+          pseudoTerminal: true,
+          taskDefinition,
+          logging: config.debug
+            ? new ecs.AwsLogDriver({
+                logGroup: logGroup,
+                streamPrefix: constants.BEDROCK_ME_CONTAINER_NAME,
+              })
+            : undefined,
+        }
+      );
+
+      bedrockMeContainer.addMountPoints({
+        containerPath: '/minecraft',
+        sourceVolume: constants.ECS_VOLUME_NAME,
+        readOnly: false,
+      });
+
       const minecraftServerContainer = new ecs.ContainerDefinition(
         this,
         'ServerContainer-' + key,
@@ -313,6 +338,11 @@ runcmd:
         containerPath: '/minecraft',
         sourceVolume: constants.ECS_VOLUME_NAME,
         readOnly: false,
+      });
+
+      minecraftServerContainer.addContainerDependencies({
+        container: bedrockMeContainer,
+        condition: ecs.ContainerDependencyCondition.COMPLETE,
       });
 
       const minecraftServerService = new ecs.FargateService(
