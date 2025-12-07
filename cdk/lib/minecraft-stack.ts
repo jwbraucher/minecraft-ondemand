@@ -384,7 +384,7 @@ runcmd:
                 path.resolve(__dirname, '../../minecraft-ecsfargate-watchdog/')
               )
             : ecs.ContainerImage.fromRegistry(
-                'doctorray/minecraft-ecsfargate-watchdog'
+                constants.WATCHDOG_SERVER_CONTAINER_IMAGE
               ),
           entryPoint: [ '/minecraft/watchdog.sh' ],
           essential: true,
@@ -415,6 +415,11 @@ runcmd:
         containerPath: '/minecraft',
         sourceVolume: constants.ECS_VOLUME_NAME,
         readOnly: false,
+      });
+
+      watchdogContainer.addContainerDependencies({
+        container: bedrockMeContainer,
+        condition: ecs.ContainerDependencyCondition.COMPLETE,
       });
 
       const serviceControlPolicy = new iam.Policy(this, 'ServiceControlPolicy-' + key, {

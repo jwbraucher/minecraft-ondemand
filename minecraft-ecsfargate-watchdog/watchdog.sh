@@ -113,7 +113,7 @@ aws route53 change-resource-record-sets --hosted-zone-id $DNSZONE --change-batch
 
 ## detemine java or bedrock based on listening port
 echo "Determining Minecraft edition based on listening port..."
-echo "If we are stuck here, the minecraft container probably failed to start.  Waiting 10 minutes just in case..."
+echo "If we are stuck here, the minecraft container probably failed to start.  Waiting 20 minutes just in case..."
 COUNTER=0
 while true
 do
@@ -121,9 +121,9 @@ do
   netstat -aun | grep :19132 && EDITION="bedrock" && break
   sleep 1
   COUNTER=$(($COUNTER + 1))
-  if [ $COUNTER -gt 600 ] ## server has not been detected as starting within 10 minutes
+  if [ $COUNTER -gt 1200 ] ## server has not been detected as starting within 20 minutes
   then
-    echo 10 minutes elapsed without a minecraft server listening, terminating.
+    echo 20 minutes elapsed without a minecraft server listening, terminating.
     zero_service
   fi
 done

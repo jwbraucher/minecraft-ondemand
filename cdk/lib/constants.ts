@@ -10,5 +10,6 @@ export const constants = {
   LAUNCHER_LAMBDA_ARN_SSM_PARAMETER: 'LauncherLambdaRoleArn',
   JAVA_EDITION_DOCKER_IMAGE: 'itzg/minecraft-server',
   BEDROCK_EDITION_DOCKER_IMAGE: '05jchambers/legendary-bedrock-container',
-  BEDROCK_ME_CONTAINER_IMAGE: 'braucher/bedrockme:20251201-1',
+  BEDROCK_ME_CONTAINER_IMAGE: 'braucher/bedrockme:20251207-1',
+  WATCHDOG_SERVER_CONTAINER_IMAGE: 'braucher/minecraft-ecsfargate-watchdog:20251207-1',
 }
