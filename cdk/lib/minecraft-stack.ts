@@ -379,11 +379,7 @@ runcmd:
         'WatchDogContainer-' + key,
         {
           containerName: constants.WATCHDOG_SERVER_CONTAINER_NAME + '-' + key,
-          image: isDockerInstalled()
-            ? ecs.ContainerImage.fromAsset(
-                path.resolve(__dirname, '../../minecraft-ecsfargate-watchdog/')
-              )
-            : ecs.ContainerImage.fromRegistry(
+          image: ecs.ContainerImage.fromRegistry(
                 constants.WATCHDOG_SERVER_CONTAINER_IMAGE
               ),
           entryPoint: [ '/minecraft/watchdog.sh' ],
